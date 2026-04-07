@@ -93,13 +93,13 @@ def index():
         db[short_code] = {"url": url, "email": recipient_email}
         save_db(db)
 
-        short_url = request.host_url + "track/" + short_code
+        short_url = request.host_url + "visit/" + short_code
         return render_template("index.html", short_url=short_url)
 
     return render_template("index.html")
 
 
-@app.route('/track/<code>')
+@app.route('/visit/<code>')
 def track(code):
     db = load_db()
     entry = db.get(code)
