@@ -6,6 +6,8 @@ import requests
 import smtplib
 from email.message import EmailMessage
 import threading
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 app = Flask(__name__)
 
