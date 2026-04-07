@@ -1,14 +1,21 @@
 from flask import Flask, request, render_template, redirect
-import os, json, uuid, requests, smtplib
+import os
+import json
+import uuid
+import requests
+import smtplib
 from email.message import EmailMessage
+import threading
 
 app = Flask(__name__)
 
 DB_FILE = "url_db.json"
-EMAIL_ADDRESS = "yaswanthyaswsnth@gmail.com"
-EMAIL_PASSWORD = "izpgmmarafnznuoe"
+
+EMAIL_ADDRESS = os.getenv("EMAIL")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASS")
 
 
+# ---------- DB ----------
 def load_db():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, 'r') as f:
@@ -18,46 +25,62 @@ def load_db():
 
 def save_db(data):
     with open(DB_FILE, 'w') as f:
-        json.dump(data, f)
+        json.dump(data, f, indent=4)
 
 
+# ---------- GEO ----------
 def get_geolocation(ip):
     try:
-        res = requests.get(f"http://ip-api.com/json/{ip}")
+        res = requests.get(f"http://ip-api.com/json/{ip}", timeout=3)
         return res.json()
     except Exception as e:
         print("[Geo Error]:", e)
         return {}
 
 
+# ---------- EMAIL ----------
 def send_email_alert(ip_data, short_code, recipient_email):
-    msg = EmailMessage()
-    msg['Subject'] = f"[Visitor] Tracked /track/{short_code}"
-    msg['From'] = EMAIL_ADDRESS
-    msg['To'] = recipient_email
+    try:
+        print("[DEBUG] Sending email...")
 
-    msg.set_content(f"""
-New Visitor Alert
+        msg = EmailMessage()
+        msg['Subject'] = f"🚨 Visitor Alert /{short_code}"
+        msg['From'] = EMAIL_ADDRESS
+        msg['To'] = recipient_email
+
+        msg.set_content(f"""
+Visitor Alert!
 
 Short Code: {short_code}
-IP Address: {ip_data.get('query', 'N/A')}
-ISP: {ip_data.get('isp', 'N/A')}
+IP: {ip_data.get('query', 'N/A')}
 City: {ip_data.get('city', 'N/A')}
 Region: {ip_data.get('regionName', 'N/A')}
 Country: {ip_data.get('country', 'N/A')}
-Timezone: {ip_data.get('timezone', 'N/A')}
-Coordinates: {ip_data.get('lat', 'N/A')} / {ip_data.get('lon', 'N/A')}
+ISP: {ip_data.get('isp', 'N/A')}
 """)
 
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        # ✅ Added timeout (prevents hanging)
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as smtp:
+            print("[DEBUG] Logging in...")
             smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+
+            print("[DEBUG] Sending...")
             smtp.send_message(msg)
-            print("[✔] Email sent successfully.")
+
+        print("[✔] Email sent successfully")
+
     except Exception as e:
-        print("[✘] Email send failed:", e)
+        print("[✘] Email error:", e)
 
 
+# ---------- BACKGROUND ----------
+def background_task(ip, code, email):
+    geo_data = get_geolocation(ip)
+    geo_data["query"] = ip
+    send_email_alert(geo_data, code, email)
+
+
+# ---------- ROUTES ----------
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
@@ -68,6 +91,7 @@ def index():
             url = "http://" + url
 
         short_code = uuid.uuid4().hex[:6]
+
         db = load_db()
         db[short_code] = {"url": url, "email": recipient_email}
         save_db(db)
@@ -84,7 +108,7 @@ def track(code):
     entry = db.get(code)
 
     if not entry:
-        return "Invalid or expired link.", 404
+        return "Invalid link", 404
 
     real_url = entry["url"]
     recipient_email = entry["email"]
@@ -92,15 +116,17 @@ def track(code):
     ip_header = request.headers.get("X-Forwarded-For", request.remote_addr)
     ip = ip_header.split(",")[0].strip() if "," in ip_header else ip_header
 
-    geo_data = get_geolocation(ip)
-    geo_data["query"] = ip  
-
-    send_email_alert(geo_data, code, recipient_email)
+    # 🚀 Background thread (FIXED)
+    thread = threading.Thread(
+        target=background_task,
+        args=(ip, code, recipient_email),
+        daemon=True   # ✅ important fix
+    )
+    thread.start()
 
     return redirect(real_url)
 
 
-
+# ---------- MAIN ----------
 if __name__ == "__main__":
     app.run(debug=True)
-
