@@ -15,7 +15,6 @@ EMAIL_ADDRESS = os.getenv("EMAIL")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASS")
 
 
-# ---------- DB ----------
 def load_db():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, 'r') as f:
@@ -27,8 +26,6 @@ def save_db(data):
     with open(DB_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
-
-# ---------- GEO ----------
 def get_geolocation(ip):
     try:
         res = requests.get(f"http://ip-api.com/json/{ip}", timeout=3)
