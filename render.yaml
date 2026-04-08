@@ -3,11 +3,11 @@ services:
     name: smart-ip-logger
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
-      - key: EMAIL_ADDRESS
-        value: yaswanthyaswsnth@gmail.com
-      - key: EMAIL_PASSWORD
-        value: izpgmmarafnznuoe
-      - key: TO_EMAIL
-        value: yaswanthvisa@gmail.com
+      - key: EMAIL
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11.6"

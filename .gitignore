@@ -1,3 +1,6 @@
-
 venv/
 .env
+url_db.json
+logs.txt
+__pycache__/
+*.pyc

@@ -6,27 +6,32 @@ import requests
 import smtplib
 from email.message import EmailMessage
 import threading
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
 DB_FILE = "url_db.json"
+db_lock = threading.Lock()
 
 EMAIL_ADDRESS = os.getenv("EMAIL")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASS")
 
 
 def load_db():
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, 'r') as f:
-            return json.load(f)
-    return {}
+    with db_lock:
+        if os.path.exists(DB_FILE):
+            with open(DB_FILE, 'r') as f:
+                return json.load(f)
+        return {}
 
 
 def save_db(data):
-    with open(DB_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
+    with db_lock:
+        with open(DB_FILE, 'w') as f:
+            json.dump(data, f, indent=4)
+
 
 def get_geolocation(ip):
     try:
@@ -58,7 +63,6 @@ Country: {ip_data.get('country', 'N/A')}
 ISP: {ip_data.get('isp', 'N/A')}
 """)
 
-        # ✅ Added timeout (prevents hanging)
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as smtp:
             print("[DEBUG] Logging in...")
             smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
@@ -115,11 +119,10 @@ def track(code):
     ip_header = request.headers.get("X-Forwarded-For", request.remote_addr)
     ip = ip_header.split(",")[0].strip() if "," in ip_header else ip_header
 
-    # 🚀 Background thread (FIXED)
     thread = threading.Thread(
         target=background_task,
         args=(ip, code, recipient_email),
-        daemon=True   # ✅ important fix
+        daemon=True
     )
     thread.start()
 
@@ -128,4 +131,5 @@ def track(code):
 
 # ---------- MAIN ----------
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host="0.0.0.0", port=port)
